@@ -91,7 +91,7 @@ unary operator:
     <funccall> ::= <symbol> "(" [<exprlist>] ")"
     <exprlist> ::= <expr> ["," <expr>]*
 
-    <number> ::= <digit>+ | "0x"<digit>+ | "'"<asciicharsequence>"'"
+    <number> ::= <digit>+ | "0x"<digit>+ | "'"<asciicharsequence>"'" | <digit>+"."<digit>*
 
     <asciicharsequence> ::= <printableasciichar> | "\'" | "\\" | "\n" | "\t" | "\r"
 
@@ -141,6 +141,47 @@ func myfunc() {
 invoking `myfunc` will cause 3 to be printed, not 2 as in statically scoped
 languages.
 
+Floating Point
+--------------
+
+Floating point values may also be stored in variables. Support for 
+floating point may add considerable code, so it is optional (included
+if FLOAT_SUPPORT is defined in tinyscript.h). 
+
+Variables have no type information, so it is necessary to explicitly convert 
+between floating point and integer values. It can be helpful to prefix 
+floating-point variable names with 'f' as a type hint.
+
+Decimal constants containing a decimal point are automatically converted to
+float in a somewhat imprecise fashion. If precision is important, use explicit
+hexadecimal constants. The math library (see below) defines the usual <math.h>
+constants.
+```
+var fX = float(10)
+var fPI = 3.14159265358979323846
+print "PI is approximately ",int(fPI)
+print "manual PI ",fPI
+print "library PI",M_PI
+```
+
+The standard arithmetic operators interpret their arguments as integers, so
+the builtin functions `fadd`, `fsub`, `fmul`, and `fdiv` should be used for
+floating point values.
+
+Comparisons can be made using `fgt` and `flt`. Equality comparison
+for floating point numbers is tricky and should be avoided, but see `fdim` in
+the math library.
+```
+var area = fmul(fPI, fmul(fX, fX))
+```
+
+Builtins also exist for the basic classification functions `isfinite`, 
+`isinf`, and `isnan`.
+```
+var fY = fdiv(10.0, 0.0)
+if isinf(fY) { print "oops" }
+```
+
 Interface to C
 ==============
 
@@ -169,6 +210,7 @@ of tinyscript.h:
 VERBOSE_ERRORS    - gives better error messages (costs a tiny bit of space)
 SMALL_PTRS        - use 16 bits for pointers (for very small machines)
 ARRAY_SUPPORT     - include support for integer arrays
+FLOAT_SUPPORT     - include support for single-precision floating point
 ```
 
 The demo app main.c has some configuration options in the Makefile:
@@ -185,6 +227,15 @@ There is an optional standard library in tinyscript_lib.{c,h} that adds
 `strlen` as a standard requirement and requires the user to define two 
 functions: `ts_malloc` and `ts_free`. These can be wrappers for `malloc`/`free`
 or perhaps `pvPortMalloc` / `vPortFree` on FreeRTOS systems.
+
+
+Math Library
+------------
+
+There is an optional floating point math library in tinyscript_math.{c,h} 
+that exposes a subset of the <math.h> functions and constants. This adds a 
+dependency on the underlying math functions.
+
 
 Application Usage
 -----------------
@@ -266,6 +317,40 @@ The standard library is optional, and is found in the file `tinyscript_lib.c`. I
 `list_set(x, i, a)`: sets the `i`th element of list `x` to `a`.
 
 `list_size(x)`: returns the current length of the list
+
+Math Library
+------------
+The math library is optional, and is found in the file `tinyscript_math.h`. It must be
+initialized with `ts_define_math_funcs()` before use. Functions provided are:
+
+`signbit(x)`: returns 1 if x < 0, 0 otherwise
+
+`ceil(x)`: returns the smallest integral value greater than or equal to x
+
+`floor(x)`: returns the largest integral value less than or equal to x
+
+`round(x)`: returns the integral value nearest to x rounding half-way cases away from zero
+
+`trunc(x)`: returns the integral value nearest to but no larger in magnitude than x
+
+`fmod(x, y)`: returns the floating-point remainder of x / y
+
+`remainder(x, y)`: returns the value r such that r = x - n * y, where n is the integer nearest the exact value of x/y
+
+`fdim(x, y)`: returns the "positive difference" between the arguments:  x - y if x > y, +0 if x is less than or equal to y
+
+`fmin(x, y)`: returns x or y, whichever is smaller
+
+`fmax(x, y)`: returns x or y, whichever is larger
+
+`fabs(x)`: returns the absolute value of x
+
+`sqrt(x)`: returns the non-negative square root of x
+
+`pow(x, y)`: returns x raised to the power y
+
+For more detailed descriptions of these functions, consult the documentation for
+the platform's math library.
 
 Acknowledgements
 ================

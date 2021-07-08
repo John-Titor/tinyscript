@@ -39,6 +39,10 @@
 #include <stdlib.h>
 #include "tinyscript.h"
 
+#ifdef FLOAT_SUPPORT
+#include <math.h>
+#endif
+
 // where our data is stored
 // value stack grows from the top of the area to the bottom
 // symbol stack grows from the bottom up
@@ -340,6 +344,14 @@ static int isdigit(int c)
 {
     return (c >= '0' && c <= '9');
 }
+static int isdecchar(int c)
+{
+#ifdef FLOAT_SUPPORT
+    return isdigit(c) || (c == '.');
+#else
+    return isdigit(c);
+#endif
+}
 static int ishexchar(int c)
 {
     return (c >= '0' && c <= '9') || charin(c, "abcdefABCDEF");
@@ -424,7 +436,7 @@ doNextToken(int israw)
             GetSpan(ishexchar);
             r = TOK_HEX_NUMBER;
         } else {
-            GetSpan(isdigit);
+            GetSpan(isdecchar);
             r = TOK_NUMBER;
         }
     } else if (c == '\'') {
@@ -547,6 +559,21 @@ StringToNum(String s)
         if (!isdigit(c)) break;
         r = 10*r + (c-'0');
     }
+#ifdef FLOAT_SUPPORT
+    if (c == '.') {
+        FloatVal fv;
+        float scale = 0.1;
+
+        fv.flt = (float)r;
+        while (len-- > 0) {
+            c = *ptr++;
+            if (!isdigit(c)) break;
+            fv.flt += scale * (c-'0');
+            scale /= 10;
+        }
+        r = fv.val;
+    }
+#endif
     return r;
 }
 
@@ -1313,42 +1340,96 @@ static Val lt(Val x, Val y) { return x<y; }
 static Val le(Val x, Val y) { return x<=y; }
 static Val gt(Val x, Val y) { return x>y; }
 static Val ge(Val x, Val y) { return x>=y; }
+#ifdef FLOAT_SUPPORT
+static Val ffloat(Val x) { FloatVal fv; fv.flt = (float)x; return fv.val; }
+static Val fint(Val x) { FloatVal fv = { x }; return (int)fv.flt; }
+static Val fadd(Val val1, Val val2) {
+    FloatVal fv1 = { val1 };
+    FloatVal fv2 = { val2 };
+    fv1.flt += fv2.flt;
+    return fv1.val;
+}
+static Val fsub(Val val1, Val val2) {
+    FloatVal fv1 = { val1 };
+    FloatVal fv2 = { val2 };
+    fv1.flt -= fv2.flt;
+    return fv1.val;
+}
+static Val fmul(Val val1, Val val2) {
+    FloatVal fv1 = { val1 };
+    FloatVal fv2 = { val2 };
+    fv1.flt *= fv2.flt;
+    return fv1.val;
+}
+static Val fdiv(Val val1, Val val2) {
+    FloatVal fv1 = { val1 };
+    FloatVal fv2 = { val2 };
+    fv1.flt /= fv2.flt;
+    return fv1.val;
+}
+static Val fgt(Val val1, Val val2) {
+    FloatVal fv1 = { val1 };
+    FloatVal fv2 = { val2 };
+    return (fv1.flt > fv2.flt) ? 1 : 0;
+}
+static Val flt(Val val1, Val val2) {
+    FloatVal fv1 = { val1 };
+    FloatVal fv2 = { val2 };
+    return (fv1.flt < fv2.flt) ? 1 : 0;
+}
+static Val fisfinite(Val val) { FloatVal fv = { val }; return isfinite(fv.flt); }
+static Val fisinf(Val val) { FloatVal fv = { val }; return isinf(fv.flt); }
+static Val fisnan(Val val) { FloatVal fv = { val }; return isnan(fv.flt); }
+#endif
 
-static struct def {
+static const struct def {
     const char *name;
     int toktype;
-    intptr_t val;
+    Val val;
 } defs[] = {
     // keywords
-    { "if",    TOK_IF, (intptr_t)ParseIf },
+    { "if",    TOK_IF, (Val)ParseIf },
     { "else",  TOK_ELSE, 0 },
     { "elseif",TOK_ELSEIF, 0 },
-    { "while", TOK_WHILE, (intptr_t)ParseWhile },
-    { "print", TOK_PRINT, (intptr_t)ParsePrint },
+    { "while", TOK_WHILE, (Val)ParseWhile },
+    { "print", TOK_PRINT, (Val)ParsePrint },
     { "var",   TOK_VARDEF, 0 },
-    { "func",  TOK_FUNCDEF, (intptr_t)ParseFuncDef },
-    { "return", TOK_RETURN, (intptr_t)ParseReturn },
+    { "func",  TOK_FUNCDEF, (Val)ParseFuncDef },
+    { "return", TOK_RETURN, (Val)ParseReturn },
 #ifdef ARRAY_SUPPORT
-    { "array", TOK_ARYDEF, (intptr_t)ParseArrayDef },
+    { "array", TOK_ARYDEF, (Val)ParseArrayDef },
+#endif
+#ifdef FLOAT_SUPPORT
+    { "float", CFUNC(1), (Val)ffloat },
+    { "int",   CFUNC(1), (Val)fint },
+    { "fadd",  CFUNC(2), (Val)fadd },
+    { "fsub",  CFUNC(2), (Val)fsub },
+    { "fmul",  CFUNC(2), (Val)fmul },
+    { "fdiv",  CFUNC(2), (Val)fdiv },
+    { "fgt",   CFUNC(2), (Val)fgt },
+    { "flt",   CFUNC(2), (Val)flt },
+    { "isfinite", CFUNC(1), (Val)fisfinite },
+    { "isinf", CFUNC(1), (Val)fisinf },
+    { "isnan", CFUNC(1), (Val)fisnan },
 #endif
     // operators
-    { "*",     BINOP(1), (intptr_t)prod },
-    { "/",     BINOP(1), (intptr_t)quot },
-    { "%",     BINOP(1), (intptr_t)mod },
-    { "+",     BINOP(2), (intptr_t)sum },
-    { "-",     BINOP(2), (intptr_t)diff },
-    { "!",     BINOP(2), (intptr_t)equals },
-    { "&",     BINOP(3), (intptr_t)bitand },
-    { "|",     BINOP(3), (intptr_t)bitor },
-    { "^",     BINOP(3), (intptr_t)bitxor },
-    { ">>",    BINOP(3), (intptr_t)shr },
-    { "<<",    BINOP(3), (intptr_t)shl },
-    { "=",     BINOP(4), (intptr_t)equals },
-    { "<>",    BINOP(4), (intptr_t)ne },
-    { "<",     BINOP(4), (intptr_t)lt },
-    { "<=",    BINOP(4), (intptr_t)le },
-    { ">",     BINOP(4), (intptr_t)gt },
-    { ">=",    BINOP(4), (intptr_t)ge },
+    { "*",     BINOP(1), (Val)prod },
+    { "/",     BINOP(1), (Val)quot },
+    { "%",     BINOP(1), (Val)mod },
+    { "+",     BINOP(2), (Val)sum },
+    { "-",     BINOP(2), (Val)diff },
+    { "!",     BINOP(2), (Val)equals },
+    { "&",     BINOP(3), (Val)bitand },
+    { "|",     BINOP(3), (Val)bitor },
+    { "^",     BINOP(3), (Val)bitxor },
+    { ">>",    BINOP(3), (Val)shr },
+    { "<<",    BINOP(3), (Val)shl },
+    { "=",     BINOP(4), (Val)equals },
+    { "<>",    BINOP(4), (Val)ne },
+    { "<",     BINOP(4), (Val)lt },
+    { "<=",    BINOP(4), (Val)le },
+    { ">",     BINOP(4), (Val)gt },
+    { ">=",    BINOP(4), (Val)ge },
 
     { NULL, 0, 0 }
 };

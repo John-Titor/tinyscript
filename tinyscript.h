@@ -13,6 +13,12 @@
 // costs about 1K on the Propeller 
 #define ARRAY_SUPPORT
 
+// define FLOAT_SUPPORT to get support for floating point
+// literals, casts to/from integers, and basic math operations
+// on floating point values.
+// Not compatible with SMALL_PTRS.
+#define FLOAT_SUPPORT
+
 #ifdef __propeller__
 // define SMALL_PTRS to use 16 bits for pointers
 // useful for machines with <= 64KB of RAM
@@ -63,6 +69,11 @@ typedef struct {
 
 // val has to be able to hold a pointer
 typedef intptr_t Val;
+
+#ifdef FLOAT_SUPPORT
+// union to support casting to/from float
+typedef union { Val val; float flt; } FloatVal;
+#endif
 
 static inline unsigned StringGetLen(String s) { return (unsigned)s.len_; }
 static inline const char *StringGetPtr(String s) { return (const char *)(intptr_t)s.ptr_; }

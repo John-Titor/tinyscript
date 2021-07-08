@@ -15,7 +15,7 @@ OPTS=-g -Og
 CC=gcc
 CFLAGS=$(OPTS) $(READLINE_DEFS) -Wall
 
-OBJS=main.o tinyscript.o tinyscript_lib.o
+OBJS=main.o tinyscript.o tinyscript_lib.o tinyscript_math.o
 
 tstest: $(OBJS) $(READLINE)
 	$(CC) $(CFLAGS) -o tstest $(OBJS) $(READLINE)

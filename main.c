@@ -10,6 +10,9 @@
 
 #include "tinyscript.h"
 #include "tinyscript_lib.h"
+#ifdef FLOAT_SUPPORT
+#include "tinyscript_math.h"
+#endif
 
 #ifdef __propeller__
 #include <propeller.h>
@@ -195,9 +198,16 @@ main(int argc, char **argv)
     }
     err |= ts_define_funcs();
     if (err != 0) {
-        printf("Initialization of interpreter failed!\n");
+        printf("Initialization of standard library failed!\n");
         return 1;
     }
+#ifdef FLOAT_SUPPORT
+    err |= ts_define_math_funcs();
+    if (err != 0) {
+        printf("Initialization of math library failed!\n");
+        return 1;
+    }
+#endif
 #ifdef __propeller__
     REPL();
 #else

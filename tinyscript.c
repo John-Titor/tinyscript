@@ -396,7 +396,7 @@ GetSpan(int (*testfn)(int))
 
 static int
 isoperator(int c) {
-    return charin(c, "+-!/*%=<>&|^");
+    return charin(c, "+-!/*%=<>&|^~");
 }
 
 static int
@@ -1332,6 +1332,7 @@ static Val diff(Val x, Val y) { return x-y; }
 static Val bitand(Val x, Val y) { return x&y; }
 static Val bitor(Val x, Val y) { return x|y; }
 static Val bitxor(Val x, Val y) { return x^y; }
+static Val bitinv(Val x, Val y) { return ~y; }
 static Val shl(Val x, Val y) { return x<<y; }
 static Val shr(Val x, Val y) { return x>>y; }
 static Val equals(Val x, Val y) { return x==y; }
@@ -1422,6 +1423,7 @@ static const struct def {
     { "&",     BINOP(3), (Val)bitand },
     { "|",     BINOP(3), (Val)bitor },
     { "^",     BINOP(3), (Val)bitxor },
+    { "~",     BINOP(3), (Val)bitinv },
     { ">>",    BINOP(3), (Val)shr },
     { "<<",    BINOP(3), (Val)shl },
     { "=",     BINOP(4), (Val)equals },

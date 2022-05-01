@@ -6,8 +6,8 @@
 #READLINE_DEFS=-DREADLINE
 
 # for linenoise
-#READLINE=linenoise.o
-#READLINE_DEFS=-DLINENOISE
+READLINE=linenoise.o
+READLINE_DEFS=-DLINENOISE
 
 # for neither, just leave both undefined
 

@@ -322,7 +322,7 @@ The standard library is optional, and is found in the file `tinyscript_lib.c`. I
 
 Math Library
 ------------
-The math library is optional, and is found in the file `tinyscript_math.h`. It must be
+The math library is optional, and is found in the file `tinyscript_math.c`. It must be
 initialized with `ts_define_math_funcs()` before use. Functions provided are:
 
 `signbit(x)`: returns 1 if x < 0, 0 otherwise

@@ -33,7 +33,7 @@
 // define this to debug the interpreter itself; otherwise leave it out
 //#define TSDEBUG
 
-#define MAX_EXPR_LEVEL 5
+#define MAX_EXPR_LEVEL 7
 
 #include <string.h>
 #include <stdlib.h>
@@ -1341,9 +1341,12 @@ static Val lt(Val x, Val y) { return x<y; }
 static Val le(Val x, Val y) { return x<=y; }
 static Val gt(Val x, Val y) { return x>y; }
 static Val ge(Val x, Val y) { return x>=y; }
+static Val land(Val x, Val y) { return x&&y; }
+static Val lor(Val x, Val y) { return x||y; }
 #ifdef FLOAT_SUPPORT
 static Val ffloat(Val x) { FloatVal fv; fv.flt = (float)x; return fv.val; }
 static Val fint(Val x) { FloatVal fv = { x }; return (int)fv.flt; }
+static Val fneg(Val x) { FloatVal fv = { x }; fv.flt = -fv.flt; return fv.val; }
 static Val fadd(Val val1, Val val2) {
     FloatVal fv1 = { val1 };
     FloatVal fv2 = { val2 };
@@ -1403,6 +1406,7 @@ static const struct def {
 #ifdef FLOAT_SUPPORT
     { "float", CFUNC(1), (Val)ffloat },
     { "int",   CFUNC(1), (Val)fint },
+    { "fneg",  CFUNC(1), (Val)fneg},
     { "fadd",  CFUNC(2), (Val)fadd },
     { "fsub",  CFUNC(2), (Val)fsub },
     { "fmul",  CFUNC(2), (Val)fmul },
@@ -1426,12 +1430,14 @@ static const struct def {
     { "~",     BINOP(3), (Val)bitinv },
     { ">>",    BINOP(3), (Val)shr },
     { "<<",    BINOP(3), (Val)shl },
-    { "=",     BINOP(4), (Val)equals },
+    { "==",    BINOP(4), (Val)equals },
     { "<>",    BINOP(4), (Val)ne },
     { "<",     BINOP(4), (Val)lt },
     { "<=",    BINOP(4), (Val)le },
     { ">",     BINOP(4), (Val)gt },
     { ">=",    BINOP(4), (Val)ge },
+    { "&&",    BINOP(5), (Val)land },
+    { "||",    BINOP(6), (Val)lor },
 
     { NULL, 0, 0 }
 };

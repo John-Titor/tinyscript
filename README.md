@@ -107,23 +107,29 @@ unary operator:
     <binop3> ::= "&" | "|" | "^" | "<<" | ">>"
 
     <expr4> ::= <expr3> [<binop4><expr4>]*
-    <binop4> ::= "=" | "<>" | ">" | "<" | ">=" | "<="
+    <binop4> ::= "==" | "<>" | ">" | "<" | ">=" | "<="
 
-    <unaryop> ::= <binop1> | <binop2> | <binop3> | <binop4> | "~"
+    <expr5> ::= <expr4> [<binop5><expr5>]*
+    <binop5> ::= "&&"
+
+    <expr6> ::= <expr5> [<binop6><expr6>]*
+    <binop6> ::= "||"
+
+    <unaryop> ::= <binop1> | <binop2> | <binop3> | <binop4> | <binop5> | <binop6> | "~" | "!"
 
 Builtin functions are defined by the runtime, as are operators. The ones
 listed above are merely the ones defined by default. Operators may use
-any of the characters `!=<>+-*/&|^%~`. Any string of the characters
-`!=<>&|^~` is processed together, but the operator characters `+-*/` may only
+any of the characters `!=<>+-*/&|^%~!`. Any string of the characters
+`!=<>&|^~!` is processed together, but the operator characters `+-*/` may only
 appear on their own.
 
 Note that any operator may be used as a unary operator, and in this case
 `<op>x` is interpreted as `0 <op> x` for any operator `<op>`. This is useful
-for `+`, `-`, and `~`, less so for other operators.
+for `+`, `-`, `~`, and `!`, less so for other operators.
 
-`%` is the modulo operator, as in C. The `~` operator performs bitwise 
-inversion as a unary operator, and ignores the left-side argument if used 
-as a binary operator.
+`%` is the modulo operator, as in C. The `~` and `!` operators perform bitwise 
+or logical inversion respectively, as a unary operator, and ignore the left-side 
+argument if used as a binary operator.
 
 Variable Scope
 --------------
@@ -150,8 +156,8 @@ Floating point values may also be stored in variables. Support for
 floating point may add considerable code, so it is optional (included
 if FLOAT_SUPPORT is defined in tinyscript.h). 
 
-Variables have no type information, so it is necessary to explicitly convert 
-between floating point and integer values. It can be helpful to prefix 
+Variables have no type information, so it is necessary to explicitly convert
+between floating point and integer values. It can be helpful to prefix
 floating-point variable names with 'f' as a type hint.
 
 Decimal constants containing a decimal point are automatically converted to
@@ -160,15 +166,19 @@ hexadecimal constants. The math library (see below) defines the usual <math.h>
 constants.
 ```
 var fX = float(10)
+var fY = fsub(0, 21.4)
 var fPI = 3.14159265358979323846
 print "PI is approximately ",int(fPI)
 print "manual PI ",fPI
-print "library PI",M_PI
+print "library PI ",M_PI
 ```
 
 The standard arithmetic operators interpret their arguments as integers, so
 the builtin functions `fadd`, `fsub`, `fmul`, and `fdiv` should be used for
 floating point values.
+
+Likewise the unary `-` operator cannot negate a floating point number; use
+`fneg(fVal)` instead.
 
 Comparisons can be made using `fgt` and `flt`. Equality comparison
 for floating point numbers is tricky and should be avoided, but see `fdim` in

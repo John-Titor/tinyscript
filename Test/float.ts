@@ -3,6 +3,7 @@ print fA
 var fB = 1.2345
 print fB
 print int(fB)
+print int(fadd(fA, fneg(99.0)))
 print fadd(fA, fB)
 print fsub(fA, fB)
 print fmul(fA, fB)

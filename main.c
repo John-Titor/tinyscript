@@ -1,26 +1,17 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
-#ifdef READLINE
-#include <readline/readline.h>
-#include <readline/history.h>
-#elif defined(LINENOISE)
+#if defined(LINENOISE)
 #include "linenoise.h"
 #endif
 
-#include "tinyscript.h"
-#include "tinyscript_lib.h"
-#ifdef FLOAT_SUPPORT
+#include "tinyscript_api.h"
+#ifdef TINYSCRIPT_FLOAT_SUPPORT
 #include "tinyscript_math.h"
 #endif
 
-#ifdef __propeller__
-#include <propeller.h>
-#define ARENA_SIZE 2048
-#else
 #define ARENA_SIZE 8192
 #define MAX_SCRIPT_SIZE 100000
-#endif
 
 int inchar() {
     return getchar();
@@ -29,36 +20,14 @@ void outchar(int c) {
     putchar(c);
 }
 
-void * ts_malloc(Val size) {
-  return malloc(size);
-}
-
-void ts_free(void * pointer) {
-  free(pointer);
-}
-
-void _ts_printf(ts_list *format, ...) {
-  va_list args;
-  va_start(args, format);
-  char *format_string = ts_list_to_string(format);
-  vprintf(format_string, args);
-  ts_free(format_string);
-}
-
-void ts_printf(ts_list *format, Val a) {
-  _ts_printf(format, a);
-}
-
-void ts_printf_(ts_list *format, Val a, Val b) {
-  _ts_printf(format, a, b);
-}
-
-void ts_printf__(ts_list *format, Val a, Val b, Val c) {
-  _ts_printf(format, a, b, c);
-}
-
 #ifdef MAX_SCRIPT_SIZE
 char script[MAX_SCRIPT_SIZE];
+
+int
+TinyScript_Stop(void)
+{
+    return 0;
+}
 
 void
 runscript(const char *filename)
@@ -76,7 +45,7 @@ runscript(const char *filename)
         return;
     }
     script[r] = 0;
-    r = TinyScript_Run(script, 0, 1);
+    r = TinyScript_RunMain(script);
     if (r != 0) {
         printf("script error %d\n", r);
     }
@@ -84,63 +53,19 @@ runscript(const char *filename)
 }
 #endif
 
-#ifdef __propeller__
-static Val getcnt_fn()
-{
-#ifdef CNT
-    return CNT;
-#else
-    return _cnt();
-#endif
-}
-static Val waitcnt_fn(Val when)
-{
-    waitcnt(when);
-    return when;
-}
-static Val pinout_fn(Val pin, Val onoff)
-{
-    unsigned mask = 1<<pin;
-    DIRA |= mask;
-    if (onoff) {
-        OUTA |= mask;
-    } else {
-        OUTA &= ~mask;
-    }
-    return OUTA;
-}
-static Val pinin_fn(Val pin)
-{
-    unsigned mask=1<<pin;
-    DIRA &= ~mask;
-    return (INA & mask) ? 1 : 0;
-}
-
-#else
 // compute a function of two variables
 // used for testing scripts
-static Val testfunc(Val x, Val y)
+static intptr_t testfunc(intptr_t x, intptr_t y)
 {
     return x*x + y*y;
 }
-#endif
 
 struct def {
     const char *name;
-    intptr_t val;
     int nargs;
+    void *val;
 } funcdefs[] = {
-#ifdef __propeller__
-    { "getcnt",    (intptr_t)getcnt_fn, 0 },
-    { "waitcnt",   (intptr_t)waitcnt_fn, 1 },
-    { "pinout",    (intptr_t)pinout_fn,  2 },
-    { "pinin",     (intptr_t)pinin_fn, 1 },
-#else
-    { "dsqr",      (intptr_t)testfunc, 2 },
-    {"printf",    (intptr_t)ts_printf, 2},
-    {"printf_",   (intptr_t)ts_printf_, 3},
-    {"printf__",  (intptr_t)ts_printf__, 4},
-#endif
+    { "dsqr",      2, (void *)testfunc },
     { NULL, 0 }
 };
 
@@ -150,19 +75,10 @@ REPL()
     int r;
     char *buf;
     
-#if defined(READLINE)
-    read_history("tinyscript_history");
-#elif defined(LINENOISE)
     linenoiseHistoryLoad("tinyscript_history");
-#endif
     
     for(;;) {
-#if defined(READLINE)
-        buf = readline("ts> ");
-        if (!buf) break;
-        add_history(buf);
-        write_history("tinyscript_history");
-#elif defined(LINENOISE)        
+#if defined(LINENOISE)        
         buf = linenoise("ts> ");
         if (!buf) break;
         linenoiseHistoryAdd(buf);
@@ -174,11 +90,11 @@ REPL()
         buf = fgets(sbuf, sizeof(sbuf), stdin);
         if (!buf) break;
 #endif
-        r = TinyScript_Run(buf, 1, 1);
+        r = TinyScript_Eval(buf);
         if (r != 0) {
             printf("error %d\n", r);
         }
-#if defined(READLINE) || defined(LINENOISE)
+#if defined(LINENOISE)
         free(buf);
 #endif        
     }
@@ -192,25 +108,21 @@ main(int argc, char **argv)
     int err;
     int i;
     
-    err = TinyScript_Init(memarena, sizeof(memarena));
+    err = TinyScript_InitInterp(memarena, sizeof(memarena));
     for (i = 0; funcdefs[i].name; i++) {
-        err |= TinyScript_Define(funcdefs[i].name, CFUNC(funcdefs[i].nargs), funcdefs[i].val);
+        err |= TinyScript_DefineCFunction(funcdefs[i].name, funcdefs[i].nargs, funcdefs[i].val);
     }
-    err |= ts_define_funcs();
     if (err != 0) {
-        printf("Initialization of standard library failed!\n");
+        printf("Initialization failed!\n");
         return 1;
     }
-#ifdef FLOAT_SUPPORT
+#ifdef TINYSCRIPT_FLOAT_SUPPORT
     err |= ts_define_math_funcs();
     if (err != 0) {
         printf("Initialization of math library failed!\n");
         return 1;
     }
 #endif
-#ifdef __propeller__
-    REPL();
-#else
     if (argc > 2) {
         printf("Usage: tinyscript [file]\n");
     }
@@ -219,7 +131,6 @@ main(int argc, char **argv)
     } else {
         REPL();
     }
-#endif
     return 0;
 }
 

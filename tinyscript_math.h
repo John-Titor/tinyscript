@@ -5,7 +5,7 @@
 #ifndef TINYSCRIPT_MATH_H
 #define TINYSCRIPT_MATH_H
 
-#include "tinyscript.h"
+#include "tinyscript_internal.h"
 
 int ts_define_math_funcs();
 

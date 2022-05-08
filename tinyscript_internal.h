@@ -1,35 +1,27 @@
-#ifndef TINYSCRIPT_H
-#define TINYSCRIPT_H
+#pragma once
 
 #include <stdint.h>
 
 // language configuration options
 
-// define VERBOSE_ERRORS to get nicer error messages at a small cost in space
+// define TINYSCRIPT_VERBOSE_ERRORS to get nicer error messages at a small cost in space
 // costs about 500 bytes on the Propeller
-#define VERBOSE_ERRORS
+//#define TINYSCRIPT_VERBOSE_ERRORS
 
-// define ARRAY_SUPPORT to get support for integer arrays
+// define TINYSCRIPT_ARRAY_SUPPORT to get support for integer arrays
 // costs about 1K on the Propeller 
-#define ARRAY_SUPPORT
+//#define TINYSCRIPT_ARRAY_SUPPORT
 
-// define FLOAT_SUPPORT to get support for floating point
+// define TINYSCRIPT_FLOAT_SUPPORT to get support for floating point
 // literals, casts to/from integers, and basic math operations
 // on floating point values.
-// Not compatible with SMALL_PTRS.
-#define FLOAT_SUPPORT
-
-#ifdef __propeller__
-// define SMALL_PTRS to use 16 bits for pointers
-// useful for machines with <= 64KB of RAM
-#define SMALL_PTRS
-#endif
+//#define TINYSCRIPT_FLOAT_SUPPORT
 
 // Comment this out if you have provided a function to
 // check whether a running script should stop. This
 // function should return non-zero when if the script
 // should stop, 0 if not.
-#define TinyScript_Stop() (0)
+//#define TinyScript_Stop() (0)
 
 // errors
 // all the ParseXXX functions return 0 on success, a negative
@@ -46,6 +38,9 @@ enum {
     TS_ERR_OK_ELSE = 1, // special internal condition
 };
 
+// Maximum expression precedence level
+#define MAX_EXPR_LEVEL 7
+
 // we use this a lot
 typedef char Byte;
 
@@ -58,39 +53,30 @@ typedef Byte *Ptr;
 // substrings directly from the script text, without having
 // to insert 0 into them
 typedef struct {
-#ifdef SMALL_PTRS
-    uint16_t len_;
-    uint16_t ptr_;
-#else
     unsigned len_;
     const char *ptr_;
-#endif
 } String;
 
 // val has to be able to hold a pointer
 typedef intptr_t Val;
 
-#ifdef FLOAT_SUPPORT
-// union to support casting to/from float
-typedef union { Val val; float flt; } FloatVal;
+#ifdef TINYSCRIPT_FLOAT_SUPPORT
+// Use int32_t here to avoid issues testing on 64bit architectures where 
+// intptr_t is too large.
+typedef union { int32_t val; float flt; } FloatVal;
 #endif
 
 static inline unsigned StringGetLen(String s) { return (unsigned)s.len_; }
 static inline const char *StringGetPtr(String s) { return (const char *)(intptr_t)s.ptr_; }
-#ifdef SMALL_PTRS
-static inline void StringSetLen(String *s, unsigned len) { s->len_ = (uint16_t)len; }
-static inline void StringSetPtr(String *s, const char *ptr) { s->ptr_ = (uint16_t)(intptr_t)ptr; }
-#else
 static inline void StringSetLen(String *s, unsigned len) { s->len_ = len; }
 static inline void StringSetPtr(String *s, const char *ptr) { s->ptr_ = ptr; }
-#endif
 
 // symbols can take the following forms:
 #define INT      0x0  // integer
 #define STRING   0x1  // string
 #define OPERATOR 0x2  // operator; precedence in high 8 bits
 #define ARG      0x3  // argument; value is offset on stack
-#ifdef ARRAY_SUPPORT
+#ifdef TINYSCRIPT_ARRAY_SUPPORT
 #define ARRAY    0x4  // integer array
 #endif
 #define BUILTIN  'B'  // builtin: number of operands in high 8 bits
@@ -122,16 +108,11 @@ typedef struct ufunc {
 //
 // global interface
 //
-int TinyScript_Init(void *mem, int mem_size);
-int TinyScript_Define(const char *name, int toktype, Val value);
-int TinyScript_Run(const char *s, int saveStrings, int topLevel);
-
-// provided by our caller
-extern void outchar(int c);
+extern int TinyScript_Init(void *mem, int mem_size);
+extern int TinyScript_Define(const char *name, int toktype, Val value);
+extern int TinyScript_Run(const char *s, int saveStrings, int topLevel);
+extern int TinyScript_Set(const char *s, int toktype, Val value);
+extern int TinyScript_Get(const char *s, int toktype, Val *value);
 
 // if an external function is provided, comment out the define, and uncomment the declaration
-#ifndef TinyScript_Stop
-extern int TinyScript_Stop();
-#endif
-
-#endif
+extern int TinyScript_Stop(void);

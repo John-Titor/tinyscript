@@ -12,15 +12,14 @@ endmsg=$ok
 for i in *.ts
 do
     j=`basename $i .ts`
-    echo $i ":" $j
+    echo $i ...
     $PROG $i > $j.txt
     if diff -ub $j.expect $j.txt
     then
-	echo $j passed
-	rm -f $j.txt
+        rm -f $j.txt
     else
-	echo $j failed
-	endmsg="TEST FAILURES"
+       echo FAIL: $j
+       endmsg="TEST FAILURES"
     fi
 done
 echo $endmsg

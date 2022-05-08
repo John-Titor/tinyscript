@@ -15,6 +15,10 @@ processor stack is used as well, so it will need some space.
 tinyscript is copyright 2016-2021 Total Spectrum Software Inc. and released
 under the MIT license. See the COPYING file for details.
 
+Modifications unique to this version are licensed CC0 (creative commons zero)
+and may be freely used by anyone for any purpose. Documentation for these
+modifications is marked ++ in the documentation below.
+
 The Language
 ============
 The scripting language itself is pretty minimalistic. The grammar for it
@@ -42,7 +46,7 @@ normally interpreted as an integer.  The symbol in an assignment
 outside of a vardecl must already have been declared.
 
 Arrays are simple one dimensional arrays. Support for arrays does add
-a little bit of code, so they are optional (included if ARRAY_SUPPORT
+a little bit of code, so they are optional (included if TINYSCRIPT_ARRAY_SUPPORT
 is defined in tinyscript.h). If the array declaration includes a size,
 then a new (uninitialized) array is created. If it does not include a
 size, then it must match one of the enclosing function's parameters,
@@ -131,6 +135,11 @@ for `+`, `-`, `~`, and `!`, less so for other operators.
 or logical inversion respectively, as a unary operator, and ignore the left-side 
 argument if used as a binary operator.
 
+`&&` and `||` are the boolean AND and OR operators respectively, again as in C. ++
+
+Note: the equality operator `==` differs from regular tinyscript, which
+confusingly uses `=` for both assignment and equality comparison. ++
+
 Variable Scope
 --------------
 
@@ -149,12 +158,12 @@ func myfunc() {
 invoking `myfunc` will cause 3 to be printed, not 2 as in statically scoped
 languages.
 
-Floating Point
---------------
+Floating Point ++
+-----------------
 
 Floating point values may also be stored in variables. Support for 
 floating point may add considerable code, so it is optional (included
-if FLOAT_SUPPORT is defined in tinyscript.h). 
+if TINYSCRIPT_FLOAT_SUPPORT is defined in tinyscript.h). 
 
 Variables have no type information, so it is necessary to explicitly convert
 between floating point and integer values. It can be helpful to prefix
@@ -197,141 +206,50 @@ if isinf(fY) { print "oops" }
 Interface to C
 ==============
 
-Environment Requirements
-------------------------
+Note ++
+-------
+The C interface is heavily modified in this implementation. 
 
-The interpreter is quite self-contained. The functions needed to
-interface with it are `outchar` (called to print a single character),
-and `memcpy`. `outchar` is the only one of these that is
-non-standard. It takes a single int as parameter and prints it as a
-character. This is the function the interpreter uses for output
-e.g. in the `print` statement.
 
-Optionally you can provide a function TinyScript_Stop() to check whether
-a running script should stop. To do this, edit the tinyscript.h file
-to remove the default definition (0) for TinyScript_Stop().
+Environment Requirements ++
+---------------------------
+
+The interpreter is quite self-contained. The functions needed to interface with
+it are `putchar` (called to print a single character), `memcpy`, and
+TinyScript_Stop(). 
+
+Both `putchar` and `memcpy` can be supplied by the C runtime. TinyScript_Stop
+() is called by the interpreter to check whether a running script should stop.
 
 
 Configuration
 -------------
 
-Language configuration options are in the form of defines at the top
-of tinyscript.h:
+Language configuration options should be passed in by the build system:
 
 ```
-VERBOSE_ERRORS    - gives better error messages (costs a tiny bit of space)
-SMALL_PTRS        - use 16 bits for pointers (for very small machines)
-ARRAY_SUPPORT     - include support for integer arrays
-FLOAT_SUPPORT     - include support for single-precision floating point
+TINYSCRIPT_ARENA_SIZE     - sets the size of the memory area reserved for TinyScript
+TINYSCRIPT_VERBOSE_ERRORS - gives better error messages (costs a tiny bit of space)
+TINYSCRIPT_ARRAY_SUPPORT  - include support for integer arrays
+TINYSCRIPT_FLOAT_SUPPORT  - include support for single-precision floating point
 ```
 
-The demo app main.c has some configuration options in the Makefile:
-
-```
-READLINE          - use the GNU readline library for entering text
-LINENOISE         - use the linenoise.c library for entering text
-```
-
-Standard Library
-----------------
-
-There is an optional standard library in tinyscript_lib.{c,h} that adds
-`strlen` as a standard requirement and requires the user to define two 
-functions: `ts_malloc` and `ts_free`. These can be wrappers for `malloc`/`free`
-or perhaps `pvPortMalloc` / `vPortFree` on FreeRTOS systems.
-
-
-Math Library
-------------
+Math Library ++
+---------------
 
 There is an optional floating point math library in tinyscript_math.{c,h} 
 that exposes a subset of the <math.h> functions and constants. This adds a 
-dependency on the underlying math functions.
+dependency on TINYSCRIPT_FLOAT_SUPPORT.
 
 
-Application Usage
------------------
+API ++
+------
 
-As mentioned above, the function `outchar` must be defined by the application
-to allow for printing. The following definition will work for standard C:
+See the documentation in `tinyscript_api.h`
 
-```
-#include <stdio.h>
-void outchar(int c) { putchar(c); }
-```
 
-Embedded systems may want to provide a definition that uses the serial port
-or an attached display.
-
-For the optional standard library `ts_malloc` and `ts_free` must be defined by
-the application. The following definitions will work for standard C:
-
-```
-#include <stdlib.h>
-void * ts_malloc(Val size) {
-  return malloc(size);
-}
-void ts_free(void * pointer) {
-  free(pointer);
-}
-```
-
-The application must initialize the interpreter with `TinyScript_Init` before
-making any other calls. `TinyScript_Init` takes two parameters: the base
-of a memory region the interpreter can use, and the size of that region.
-It returns `TS_ERR_OK` on success, or an error on failure. It is recommended
-to provide at least 2K of space to the interpreter.
-
-If `TinyScript_Init` succeeds, the application may then define builtin
-symbols with `TinyScript_Define(name, BUILTIN, (Val)func)`, where
-`name` is the name of the symbol in scripts and `func` is the C
-function. Technically the function should have prototype:
-
-    Val func(Val a, Val b, Val c, Val d)
-
-However, most C compiler calling conventions are such that any C function
-(other than varargs ones) will work. (Certainly this is true of GCC on
-the Propeller). On the script side, the interpreter
-will supply 0 for any arguments the user does not supply, and will silently
-ignore arguments given beyond the fourth.
-
-In order to use the optional standard library, its functions need to be added
-to the Tinyscript context by calling `ts_define_funcs()`. Check the source code
-and tests for more information about what is included in the standard library.
-
-To run a script, use `TinyScript_Run(script, saveStrings, topLevel)`. Here
-`script` is a C string, `saveStrings` is 1 if any variable names created
-in the script need to be saved in newly allocated memory -- this is necessary
-if the space `script` is stored in may later be overwritten, e.g. in
-a REPL loop by new commands typed by the user. `topLevel` is 1 if the
-variables created by the script should be kept after it finishes.
-
-Standard Library
------------------
-The standard library is optional, and is found in the file `tinyscript_lib.c`. It must be initialized with `ts_define_funcs()` before use. Functions provided are:
-
-`not(x)`: return 1 if x == 0, 0 otherwise
-
-`bool(x)`: returns 0 if x == 0, 1 otherwise
-
-`list_new(n)`: returns a handle to a new list which may contain up to `n` elements
-
-`list_dup(x)`: duplicates the list `x`
-
-`list_free(x)`: frees a list
-
-`list_pop(x)`: removes the last element from list `x` and returns it; returns -1 if no elements have been added to the list
-
-`list_push(x, a)`: appends the value `a` to the list whose handle is `x`
-
-`list_get(x, i)`: retrieves the `i`th element of the list `x`, or -1 if there is no such element
-
-`list_set(x, i, a)`: sets the `i`th element of list `x` to `a`.
-
-`list_size(x)`: returns the current length of the list
-
-Math Library
-------------
+Math Library ++
+---------------
 The math library is optional, and is found in the file `tinyscript_math.c`. It must be
 initialized with `ts_define_math_funcs()` before use. Functions provided are:
 

@@ -33,13 +33,12 @@
 // define this to debug the interpreter itself; otherwise leave it out
 //#define TSDEBUG
 
-#define MAX_EXPR_LEVEL 7
-
 #include <string.h>
 #include <stdlib.h>
-#include "tinyscript.h"
+#include <stdio.h>
+#include "tinyscript_internal.h"
 
-#ifdef FLOAT_SUPPORT
+#ifdef TINYSCRIPT_FLOAT_SUPPORT
 #include <math.h>
 #endif
 
@@ -53,7 +52,7 @@ static Sym *symptr;
 static Val *valptr;
 static String parseptr;  // acts as instruction pointer
 
-#ifdef VERBOSE_ERRORS
+#ifdef TINYSCRIPT_VERBOSE_ERRORS
 static const char *script_buffer;
 #endif
 
@@ -69,14 +68,15 @@ static Val tokenVal;  // for symbolic tokens, the symbol's value
 static Sym *tokenSym;
 static int didReturn = 0;
 
-#ifdef ARRAY_SUPPORT
+#ifdef TINYSCRIPT_ARRAY_SUPPORT
 static int ParseArrayDef(int saveStrings);
 static int ParseArrayGet(Val *vp);
 static int ParseArraySet();
 #endif
 
 // compare two Strings for equality
-Val stringeq(String ai, String bi)
+static Val
+stringeq(String ai, String bi)
 {
     const Byte *a, *b;
     int i, len;
@@ -99,23 +99,23 @@ Val stringeq(String ai, String bi)
 //
 
 // print a string
-void
+static void
 PrintString(String s)
 {
     unsigned len = StringGetLen(s);
     const char *ptr = (const char *)StringGetPtr(s);
     while (len > 0) {
-        outchar(*ptr);
+        putchar(*ptr);
         ptr++;
         --len;
     }
 }
 
 // print a newline
-void
+static void
 Newline(void)
 {
-    outchar('\n');
+    putchar('\n');
 }
 
 // print a number
@@ -131,7 +131,7 @@ PrintNumber(Val v)
     char buf[32];
     
     if (v < 0) {
-        outchar('-');
+        putchar('-');
         x = -v;
     } else {
         x = v;
@@ -146,7 +146,7 @@ PrintNumber(Val v)
     // now output
     while (digits > 0) {
         --digits;
-        outchar(buf[digits]);
+        putchar(buf[digits]);
     }
 }
 
@@ -170,7 +170,7 @@ static void
 outcstr(const char *ptr)
 {
     while (*ptr) {
-        outchar(*ptr++);
+        putchar(*ptr++);
     }
 }
 
@@ -183,7 +183,7 @@ static int charin(int c, const char *str)
     return 0;
 }
 
-#ifdef VERBOSE_ERRORS
+#ifdef TINYSCRIPT_VERBOSE_ERRORS
 //
 // some functions to print an error and return
 //
@@ -196,10 +196,10 @@ static void ErrorAt() {
 	outcstr(" in: ");
 	// print until end of statement
 	while (*ptr && !charin(*ptr, ";\n")) {
-		outchar(*ptr);
+		putchar(*ptr);
 		ptr++;
 	}
-	outchar('\n');
+	putchar('\n');
 }
 static int SyntaxError() {
     outcstr("syntax error");
@@ -225,7 +225,7 @@ static int UnknownSymbol() {
     outcstr(": unknown symbol\n");
     return TS_ERR_UNKNOWN_SYM;
 }
-#ifdef ARRAY_SUPPORT
+#ifdef TINYSCRIPT_ARRAY_SUPPORT
 static int OutOfBounds() {
     outcstr("out of bounds");
     ErrorAt();
@@ -238,7 +238,7 @@ static int OutOfBounds() {
 #define TooManyArgs() TS_ERR_TOOMANYARGS
 #define OutOfMem()    TS_ERR_NOMEM
 #define UnknownSymbol() TS_ERR_UNKNOWN_SYM
-#ifdef ARRAY_SUPPORT
+#ifdef TINYSCRIPT_ARRAY_SUPPORT
 #define OutOfBounds()   TS_ERR_OUTOFBOUNDS
 #endif
 #endif
@@ -259,7 +259,7 @@ static int OutOfBounds() {
 #define TOK_PRINT  'p'
 #define TOK_VAR    'v'
 #define TOK_VARDEF 'V'
-#ifdef ARRAY_SUPPORT
+#ifdef TINYSCRIPT_ARRAY_SUPPORT
 #define TOK_ARY        'y'
 #define TOK_ARYDEF     'Y'
 #endif
@@ -346,7 +346,7 @@ static int isdigit(int c)
 }
 static int isdecchar(int c)
 {
-#ifdef FLOAT_SUPPORT
+#ifdef TINYSCRIPT_FLOAT_SUPPORT
     return isdigit(c) || (c == '.');
 #else
     return isdigit(c);
@@ -460,7 +460,7 @@ doNextToken(int israw)
             if (sym) {
                 r = sym->type & 0xff;
                 tokenArgs = (sym->type >> 8) & 0xff;
-#ifdef ARRAY_SUPPORT
+#ifdef TINYSCRIPT_ARRAY_SUPPORT
                 if (r == ARRAY)
                     r = TOK_ARY;
                 else
@@ -507,12 +507,12 @@ doNextToken(int israw)
     }
 #ifdef TSDEBUG
     outcstr("Token[");
-    outchar(r & 0xff);
+    putchar(r & 0xff);
     outcstr(" / ");
     PrintNumber(r);
     outcstr("] = ");
     PrintString(token);
-    outchar('\n');
+    putchar('\n');
 #endif
     curToken = r;
     return r;
@@ -524,7 +524,7 @@ static int NextRawToken() { return doNextToken(1); }
 // push a number on the result stack
 // this stack grows down from the top of the arena
 
-Val
+static Val
 Push(Val x)
 {
     --valptr;
@@ -536,7 +536,7 @@ Push(Val x)
 }
 
 // pop a number off the result stack
-Val
+static Val
 Pop()
 {
     Val r = 0;
@@ -547,11 +547,11 @@ Pop()
 }
 
 // convert a string to a number
-Val
+static Val
 StringToNum(String s)
 {
     Val r = 0;
-    int c;
+    int c = 0;
     const Byte *ptr = StringGetPtr(s);
     int len = StringGetLen(s);
     while (len-- > 0) {
@@ -559,10 +559,10 @@ StringToNum(String s)
         if (!isdigit(c)) break;
         r = 10*r + (c-'0');
     }
-#ifdef FLOAT_SUPPORT
-    if (c == '.') {
-        FloatVal fv;
-        float scale = 0.1;
+#ifdef TINYSCRIPT_FLOAT_SUPPORT
+    if ((len > 0) && (c == '.')) {
+        FloatVal fv = { 0 };
+        float scale = 0.1f;
 
         fv.flt = (float)r;
         while (len-- > 0) {
@@ -578,7 +578,7 @@ StringToNum(String s)
 }
 
 // convert a hex string to a number
-Val
+static Val
 HexStringToNum(String s)
 {
     Val r = 0;
@@ -624,7 +624,7 @@ DefineVar(String name)
     return DefineSym(name, INT, 0);
 }
 
-String
+static String
 Cstring(const char *str)
 {
     String x;
@@ -643,7 +643,29 @@ TinyScript_Define(const char *name, int typ, Val val)
     return TS_ERR_OK;
 }
 
-extern int ParseExpr(Val *result);
+int
+TinyScript_Set(const char *name, int typ, Val val)
+{
+    Sym *s;
+    s = LookupSym(Cstring(name));
+    if (!s) return TS_ERR_UNKNOWN_SYM;
+    if (s->type != typ) return TS_ERR_BADARGS;
+    s->value = val;
+    return TS_ERR_OK;
+}
+
+int
+TinyScript_Get(const char *name, int typ, Val *val)
+{
+    Sym *s;
+    s = LookupSym(Cstring(name));
+    if (!s) return TS_ERR_UNKNOWN_SYM;
+    if (s->type != typ) return TS_ERR_BADARGS;
+    *val = s->value;
+    return TS_ERR_OK;
+}
+
+static int ParseExpr(Val *result);
 
 // parse an expression list, and push the various results
 // returns the number of items pushed, or a negative error
@@ -673,7 +695,7 @@ ParseExprList(void)
     return count;
 }
 
-int
+static int
 ParseChar(Val *vp, String token)
 {
   const Byte *ptr = StringGetPtr(token);
@@ -790,7 +812,7 @@ ParsePrimary(Val *vp)
         *vp = tokenVal;
         NextToken();
         return TS_ERR_OK;
-#ifdef ARRAY_SUPPORT
+#ifdef TINYSCRIPT_ARRAY_SUPPORT
     } else if (c == TOK_ARY) {
         return ParseArrayGet(vp);
 #endif
@@ -853,7 +875,7 @@ ParseExprLevel(int max_level, Val *vp)
     return err;
 }
 
-int
+static int
 ParseExpr(Val *vp)
 {
     int err;
@@ -901,7 +923,8 @@ static int ParseString(String str, int saveStrings, int topLevel);
 // this is slightly different in that it may return the non-erro TS_ERR_ELSE
 // to signify that the condition was false
 //
-static int ParseIf()
+static int
+ParseIf()
 {
     String then;
     Val cond;
@@ -1019,7 +1042,7 @@ ParseFuncDef(int saveStrings)
     return TS_ERR_OK;
 }
 
-#ifdef ARRAY_SUPPORT
+#ifdef TINYSCRIPT_ARRAY_SUPPORT
 // assign a value or list of values to an array
 static int
 ArrayAssign(Val* ary, Val ix)
@@ -1259,7 +1282,7 @@ ParseStmt(int saveStrings)
             return SyntaxError();
         }
         if (!s) {
-#ifdef VERBOSE_ERRORS
+#ifdef TINYSCRIPT_VERBOSE_ERRORS
             PrintString(name);
 #endif
             return UnknownSymbol(); // unknown symbol
@@ -1270,7 +1293,7 @@ ParseStmt(int saveStrings)
             return err;
         }
         s->value = val;
-#ifdef ARRAY_SUPPORT
+#ifdef TINYSCRIPT_ARRAY_SUPPORT
     } else if (c == TOK_ARY) {
         err = ParseArraySet();
 #endif
@@ -1343,8 +1366,8 @@ static Val gt(Val x, Val y) { return x>y; }
 static Val ge(Val x, Val y) { return x>=y; }
 static Val land(Val x, Val y) { return x&&y; }
 static Val lor(Val x, Val y) { return x||y; }
-#ifdef FLOAT_SUPPORT
-static Val ffloat(Val x) { FloatVal fv; fv.flt = (float)x; return fv.val; }
+#ifdef TINYSCRIPT_FLOAT_SUPPORT
+static Val ffloat(Val x) { FloatVal fv = { 0 }; fv.flt = (float)x; return fv.val; }
 static Val fint(Val x) { FloatVal fv = { x }; return (int)fv.flt; }
 static Val fneg(Val x) { FloatVal fv = { x }; fv.flt = -fv.flt; return fv.val; }
 static Val fadd(Val val1, Val val2) {
@@ -1400,10 +1423,10 @@ static const struct def {
     { "var",   TOK_VARDEF, 0 },
     { "func",  TOK_FUNCDEF, (Val)ParseFuncDef },
     { "return", TOK_RETURN, (Val)ParseReturn },
-#ifdef ARRAY_SUPPORT
+#ifdef TINYSCRIPT_ARRAY_SUPPORT
     { "array", TOK_ARYDEF, (Val)ParseArrayDef },
 #endif
-#ifdef FLOAT_SUPPORT
+#ifdef TINYSCRIPT_FLOAT_SUPPORT
     { "float", CFUNC(1), (Val)ffloat },
     { "int",   CFUNC(1), (Val)fint },
     { "fneg",  CFUNC(1), (Val)fneg},
@@ -1447,7 +1470,7 @@ TinyScript_Init(void *mem, int mem_size)
 {
     int i;
     int err;
-    
+
     arena = (Byte *)mem;
     arena_size = mem_size;
     symptr = (Sym *)arena;
@@ -1463,7 +1486,7 @@ TinyScript_Init(void *mem, int mem_size)
 int
 TinyScript_Run(const char *buf, int saveStrings, int topLevel)
 {
-#ifdef VERBOSE_ERRORS
+#ifdef TINYSCRIPT_VERBOSE_ERRORS
     script_buffer = buf;
 #endif
     return ParseString(Cstring(buf), saveStrings, topLevel);
